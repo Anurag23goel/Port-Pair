@@ -3,9 +3,9 @@ import connectPool, { pool } from "@/utils/database";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { line: string } }
+  context: { params: Promise<{line: string}> }
 ) {
-  const { line } = await params;
+  const  {line}  = await context.params;
 
   try {
     await connectPool();
