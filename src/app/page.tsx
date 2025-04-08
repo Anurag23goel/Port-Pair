@@ -54,7 +54,7 @@ export default function Home() {
         console.error("Suggestions Error:", err.message);
         setSuggestions([]);
       }
-    }, 300),
+    }, 100),
     [searchMode]
   );
 
