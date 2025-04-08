@@ -1,6 +1,9 @@
 import mysql from "mysql2/promise";
-import fs from "fs";
-import path from "path";
+// import fs from "fs";
+// import path from "path";
+import { Buffer } from "buffer";
+
+const caPem = Buffer.from(process.env.CA_PEM_B64 || "", "base64").toString("utf-8");
 
 export const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -13,7 +16,7 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   connectTimeout: 30000, // 30 seconds timeout
   ssl: {
-    ca: fs.readFileSync(path.join(process.cwd(), "certificates/ca.pem")), // Correct path from root
+    ca: caPem,
     rejectUnauthorized: true,
   },
 });
