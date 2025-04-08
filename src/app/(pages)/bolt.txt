@@ -1,0 +1,343 @@
+import { useState, useCallback } from "react";
+import { Search, Ship, Anchor, Globe2, Container, Building2 } from "lucide-react";
+import { debounce } from "lodash";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+
+// Interfaces
+interface PortDetails {
+  port_id: number;
+  pod: string;
+  region: string | null;
+  country: string | null;
+  shipping_lines: string;
+}
+
+interface ShippingLineDetails {
+  name: string;
+  ports: string[];
+}
+
+export default function App() {
+  // State for Port Search
+  const [podInput, setPodInput] = useState("");
+  const [portSuggestions, setPortSuggestions] = useState<string[]>([]);
+  const [selectedPort, setSelectedPort] = useState<PortDetails | null>(null);
+  
+  // State for Shipping Line Search
+  const [lineInput, setLineInput] = useState("");
+  const [lineSuggestions, setLineSuggestions] = useState<string[]>([]);
+  const [selectedLine, setSelectedLine] = useState<ShippingLineDetails | null>(null);
+  
+  // Shared state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Port search functions
+  const fetchPortSuggestions = useCallback(
+    debounce(async (query: string) => {
+      if (query.length < 2) {
+        setPortSuggestions([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/ports/suggestions?query=${query}`);
+        if (!res.ok) throw new Error("Failed to fetch suggestions");
+        const data = await res.json();
+        setPortSuggestions(data);
+      } catch (err) {
+        console.error("Error fetching suggestions:", err);
+        setPortSuggestions([]);
+      }
+    }, 300),
+    []
+  );
+
+  const fetchPortDetails = async (pod: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ports/${encodeURIComponent(pod)}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to fetch port details");
+      }
+      const { data, success } = await res.json();
+      if (!success) throw new Error("Port not found");
+      setSelectedPort(data);
+      setSelectedLine(null); // Clear shipping line results
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch port details. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Shipping line search functions
+  const fetchLineDetails = async (line: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/shipping-lines/${encodeURIComponent(line)}`);
+      if (!res.ok) throw new Error("Failed to fetch shipping line details");
+      const data = await res.json();
+      setSelectedLine(data);
+      setSelectedPort(null); // Clear port results
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch shipping line details. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Event handlers
+  const handlePortInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setPodInput(value);
+    fetchPortSuggestions(value);
+  };
+
+  const handleLineInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLineInput(value);
+    // Add shipping line suggestions fetch here
+  };
+
+  const handlePortSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (podInput.trim()) {
+      fetchPortDetails(podInput);
+    }
+  };
+
+  const handleLineSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lineInput.trim()) {
+      fetchLineDetails(lineInput);
+    }
+  };
+
+  // Helper functions
+  const getShippingLines = (port: PortDetails | null) => {
+    if (!port || !port.shipping_lines) return [];
+    return port.shipping_lines.split(",").map((line) => line.trim());
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="container mx-auto px-4 py-12">
+        {/* Header */}
+        <div className="mb-12 text-center">
+          <div className="inline-flex items-center justify-center p-2 mb-4 bg-white dark:bg-gray-800 rounded-full shadow-md">
+            <Ship className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Maritime Search Hub
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Your comprehensive resource for global shipping information
+          </p>
+        </div>
+
+        {/* Main Search Interface */}
+        <div className="max-w-3xl mx-auto mb-12">
+          <Tabs defaultValue="port" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-8">
+              <TabsTrigger value="port" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Search by Port
+              </TabsTrigger>
+              <TabsTrigger value="line" className="flex items-center gap-2">
+                <Container className="h-4 w-4" />
+                Search by Shipping Line
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="port">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Port Search</CardTitle>
+                  <CardDescription>
+                    Find detailed information about ports worldwide
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePortSubmit} className="space-y-4">
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        placeholder="Enter port name (e.g., Shanghai, Singapore)"
+                        value={podInput}
+                        onChange={handlePortInputChange}
+                        className="w-full"
+                      />
+                      {portSuggestions.length > 0 && (
+                        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
+                          {portSuggestions.map((suggestion) => (
+                            <li
+                              key={suggestion}
+                              onClick={() => {
+                                setPodInput(suggestion);
+                                setPortSuggestions([]);
+                                fetchPortDetails(suggestion);
+                              }}
+                              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                            >
+                              {suggestion}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={loading || !podInput.trim()}
+                    >
+                      {loading ? "Searching..." : "Search Port"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="line">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shipping Line Search</CardTitle>
+                  <CardDescription>
+                    Discover port coverage by shipping line
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleLineSubmit} className="space-y-4">
+                    <Input
+                      type="text"
+                      placeholder="Enter shipping line name"
+                      value={lineInput}
+                      onChange={handleLineInputChange}
+                      className="w-full"
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={loading || !lineInput.trim()}
+                    >
+                      {loading ? "Searching..." : "Search Shipping Line"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="max-w-3xl mx-auto mb-8">
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
+              {error}
+            </div>
+          </div>
+        )}
+
+        {/* Results Display */}
+        {selectedPort && (
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
+                  <Anchor className="h-6 w-6 text-blue-500" />
+                  {selectedPort.pod}
+                </h2>
+                
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                      Port Details
+                    </h3>
+                    <dl className="space-y-3">
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Region
+                        </dt>
+                        <dd className="text-gray-900 dark:text-gray-100">
+                          {selectedPort.region || "Not specified"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Country
+                        </dt>
+                        <dd className="text-gray-900 dark:text-gray-100">
+                          {selectedPort.country || "Not specified"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                      Serving Shipping Lines
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {getShippingLines(selectedPort).map((line) => (
+                        <Badge
+                          key={line}
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                        >
+                          <Ship className="h-3 w-3" />
+                          {line}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedLine && (
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-6">
+                  <Container className="h-6 w-6 text-blue-500" />
+                  {selectedLine.name}
+                </h2>
+                
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                  Served Ports
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {selectedLine.ports.map((port) => (
+                    <Badge
+                      key={port}
+                      variant="outline"
+                      className="flex items-center gap-1"
+                    >
+                      <Anchor className="h-3 w-3" />
+                      {port}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
